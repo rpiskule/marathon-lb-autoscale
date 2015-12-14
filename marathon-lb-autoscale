@@ -1,0 +1,19 @@
+{
+  "id": "marathon-lb-autoscale",
+  "args":[
+    "--marathon", "http://leader.mesos:8080",
+    "--haproxy", "http://marathon-lb.marathon.mesos:9090",
+    "--apps", "web-app_80,web-app_443,web-app_8080"
+  ],
+  "cpus": 0.1,
+  "mem": 16.0,
+  "instances": 1,
+  "container": {
+    "type": "DOCKER",
+    "docker": {
+      "image": "rpiskule/marathon-lb-autoscale",
+      "network": "HOST",
+      "forcePullImage": true
+    }
+  }
+}

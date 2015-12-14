@@ -144,14 +144,17 @@ class Autoscale
             haproxy_data << sample(uri)
           end
         end
+
         aggregate_haproxy_data(haproxy_data)
-
         update_current_marathon_instances
-
         calculate_target_instances
 
+        @log.info("total_samples: " + total_samples + ". Need: " + @options.samples)
         if total_samples >= @options.samples
+
           scale_list = build_scaling_list
+          @log.info("scale_list: " + scale_list)
+
           if !scale_list.empty?
             @log.info("#{scale_list.length} apps require scaling")
           end
@@ -270,16 +273,24 @@ class Autoscale
       # Scale if: the target and current instances don't match, we've exceed the
       # threshold difference, and a scale operation wasn't performed recently
       if data[:target_instances] == data[:current_instances]
+        @log.info("Not scaling " + app + " because target instances do not match current instances:" + data[:target_instances] + " == " + data[:current_instances])
         data[:intervals_past_threshold] = 0
         next
       end
-      if ((data[:rate_avg] / data[:current_instances]) - @options.target_rps).abs.to_f / @options.target_rps < @options.threshold_percent &&
-              (data[:target_instances] - data[:current_instances]).abs.to_f < @options.threshold_instances
+
+      average_threshold = ((data[:rate_avg] / data[:current_instances]) - @options.target_rps).abs.to_f / @options.target_rps
+      needed_instances = data[:target_instances] - data[:current_instances]
+
+      if average_threshold < @options.threshold_percent &&
+              (needed_instances).abs.to_f < @options.threshold_instances
+        @log.info("Not scaling " + app + " because of threshold requirements: " + average_threshold + " < " + @options.threshold_percentage + " && " + needed_instances + " < " + @options.threshold_instances)
         data[:intervals_past_threshold] = 0
         next
       end
+
       data[:intervals_past_threshold] += 1
       if data[:intervals_past_threshold] < @options.intervals_past_threshold
+        @log.info("Not scaling " + app + " because of insufficient time has expired: " + data[:intervals_past_threshold] + " < " + @options.intervals_past_threshold)
         next
       end
 
@@ -290,7 +301,9 @@ class Autoscale
                   "target_rps=#{@options.target_rps} current_rps=#{data[:rate_avg] / data[:current_instances]}")
         next
       end
+
       if to_scale.has_key?(app_id) && to_scale[app_id] > data[:target_instances]
+        @log.info(app_id + " is already in the list, maybe as a different port. Not scaling: " + to_scale[app_id] + " > " + data[:target_instances])
         # If another frontend requires more instances than this one, do nothing
       else
         @log.info("Scaling #{app_id} from #{data[:current_instances]} to " +
